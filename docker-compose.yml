@@ -1,0 +1,15 @@
+services:
+  telegram-bot:
+    build: .
+    container_name: telegram-inventory-bot
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - bot-network
+
+networks:
+  bot-network:
+    driver: bridge
