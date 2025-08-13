@@ -3,7 +3,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const { createClient } = require('@supabase/supabase-js');
 const { mainMenu } = require('./menus');
 const { isAuthorized } = require('./auth');
-const { handleStockCommand, handleUpdateCommand } = require('./commands');
+const { handleStockCommand, handleUpdateCommand, handleAddCommand, handleSubtractCommand } = require('./commands');
 const { handleCallbackQuery } = require('./callbacks');
 
 // Initialize Supabase client
@@ -44,12 +44,22 @@ bot.onText(/\/help/, (msg) => {
   
   bot.sendMessage(
     chatId,
-    'Kullanılabilir komutlar:\n\n' +
-    '/start - Ana menüyü göster\n' +
-    '/help - Bu yardım mesajını göster\n' +
-    '/stock <product_id> - Ürün stok seviyesini kontrol et\n' +
-    '/add <product_id> <amount> - Ürün stok miktarını ekle\n' +
-    '/subtract <product_id> <amount> - Ürün stok miktarını çıkar'
+    '📋 **Kullanım Kılavuzu**\n\n' +
+    '**Komutlar:**\n' +
+    '• `/start` - Ana menüyü göster\n' +
+    '• `/help` - Bu yardım mesajını göster\n' +
+    '• `/stock <ürün_id>` - Stok durumunu kontrol et\n' +
+    '• `/add <ürün_id> [miktar]` - Stok ekle (varsayılan: 1)\n' +
+    '• `/subtract <ürün_id> [miktar]` - Stok çıkar (varsayılan: 1)\n\n' +
+    '**Hızlı Kullanım:**\n' +
+    '• Sadece ürün ID yazarak stok sorgulayabilirsiniz\n' +
+    '• Stok sorguladıktan sonra hızlı ekleme/çıkarma butonları görünür\n' +
+    '• Menüden seçim yaparak rehberli işlem yapabilirsiniz\n\n' +
+    '**Desteklenen Formatlar:**\n' +
+    '• `PRODUCTID`\n' +
+    '• `AF-PRODUCTID-BTY`\n' +
+    '• `PRODUCTID-G`',
+    { parse_mode: 'Markdown' }
   );
 });
 
@@ -66,8 +76,8 @@ bot.onText(/\/stock (.+)/, (msg, match) => {
   handleStockCommand(bot, chatId, productId, supabase);
 });
 
-// Handle /add command
-bot.onText(/\/add (.+) (.+)/, (msg, match) => {
+// Handle /add command with optional amount
+bot.onText(/\/add (.+?)(?:\s+(\d+))?$/, (msg, match) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
   
@@ -76,12 +86,12 @@ bot.onText(/\/add (.+) (.+)/, (msg, match) => {
   }
   
   const productId = match[1].trim();
-  const amountStr = '+' + match[2].trim();
-  handleUpdateCommand(bot, chatId, productId, amountStr, supabase);
+  const amount = match[2] ? match[2].trim() : null;
+  handleAddCommand(bot, chatId, productId, amount, supabase);
 });
 
-// Handle /subtract command
-bot.onText(/\/subtract (.+) (.+)/, (msg, match) => {
+// Handle /subtract command with optional amount
+bot.onText(/\/subtract (.+?)(?:\s+(\d+))?$/, (msg, match) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
   
@@ -90,8 +100,31 @@ bot.onText(/\/subtract (.+) (.+)/, (msg, match) => {
   }
   
   const productId = match[1].trim();
-  const amountStr = '-' + match[2].trim();
-  handleUpdateCommand(bot, chatId, productId, amountStr, supabase);
+  const amount = match[2] ? match[2].trim() : null;
+  handleSubtractCommand(bot, chatId, productId, amount, supabase);
+});
+
+// Handle text messages for direct product ID input
+bot.on('message', async (msg) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+  const text = msg.text;
+  
+  // Skip if not authorized or if it's a command
+  if (!isAuthorized(userId) || !text || text.startsWith('/')) {
+    return;
+  }
+  
+  // Check if this is a response to a menu action by checking recent callback data
+  // This is a simple approach - in production you might want to use user sessions
+  const parts = text.trim().split(/\s+/);
+  const productId = parts[0];
+  const amount = parts[1];
+  
+  // If it looks like a product ID (alphanumeric), treat it as stock query
+  if (/^[A-Za-z0-9\-_]+$/.test(productId)) {
+    await handleStockCommand(bot, chatId, productId, supabase);
+  }
 });
 
 // Handle callback queries (button clicks)

@@ -6,6 +6,28 @@
 const { backToMainMenu, createConfirmationMenu } = require('./menus');
 
 /**
+ * Clean product ID by removing prefixes and suffixes
+ * @param {string} productId - Raw product ID
+ * @returns {string} - Cleaned product ID
+ */
+function cleanProductId(productId) {
+  if (!productId) return '';
+  
+  let cleaned = productId.trim().toUpperCase();
+  
+  // Remove AF- prefix and -BTY suffix (AF-PRODUCTID-BTY format)
+  if (cleaned.startsWith('AF-') && cleaned.endsWith('-BTY')) {
+    cleaned = cleaned.substring(3, cleaned.length - 4);
+  }
+  // Remove -G suffix (PRODUCTID-G format)
+  else if (cleaned.endsWith('-G')) {
+    cleaned = cleaned.substring(0, cleaned.length - 2);
+  }
+  
+  return cleaned;
+}
+
+/**
  * Handle the /stock command to check stock level
  * @param {Object} bot - Telegram bot instance
  * @param {number} chatId - Telegram chat ID
@@ -24,7 +46,7 @@ async function handleStockCommand(bot, chatId, productId, supabase) {
     }
 
     // Clean the product ID
-    const cleanProductId = productId.trim().toUpperCase();
+    const cleanedProductId = cleanProductId(productId);
 
     // Query the stock table with join to ebujiteri table
     const { data, error } = await supabase
@@ -33,7 +55,7 @@ async function handleStockCommand(bot, chatId, productId, supabase) {
         id, 
         quantity
       `)
-      .eq('id', cleanProductId)
+      .eq('id', cleanedProductId)
       .single();
 
     if (data && !error) {
@@ -58,12 +80,12 @@ async function handleStockCommand(bot, chatId, productId, supabase) {
     if (!data) {
       return bot.sendMessage(
         chatId, 
-        `❌ ${cleanProductId} ID'li ürün envanterde bulunamadı.`,
+        `❌ ${cleanedProductId} ID'li ürün envanterde bulunamadı.`,
         backToMainMenu
       );
     }
 
-    // Send the stock information
+    // Send the stock information with quick action buttons
     const stockInfo = `📊 Stok Bilgisi:
 
 Ürün ID: ${data.id}
@@ -71,10 +93,24 @@ Shopier ID: ${data.ebujiteri ? data.ebujiteri.shopier_id : 'N/A'}
 Miktar: ${data.quantity}
 Shopier URL: ${data.ebujiteri ? `https://shopier.com/${data.ebujiteri.shopier_id}` : 'N/A'}`;
 
+    const quickActionMenu = {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: "➕ Stok Ekle", callback_data: `quick_add_${data.id}` },
+            { text: "➖ Stok Çıkar", callback_data: `quick_subtract_${data.id}` }
+          ],
+          [
+            { text: "🔙 Ana Menüye Dön", callback_data: "main_menu" }
+          ]
+        ]
+      }
+    };
+
     return bot.sendMessage(
       chatId,
       stockInfo,
-      backToMainMenu
+      quickActionMenu
     );
   } catch (error) {
     console.error('Error in handleStockCommand:', error);
@@ -106,7 +142,7 @@ async function handleUpdateCommand(bot, chatId, productId, amountStr, supabase) 
     }
 
     // Clean the product ID
-    const cleanProductId = productId.trim().toUpperCase();
+    const cleanedProductId = cleanProductId(productId);
 
     // Parse the amount
     const isAddition = amountStr.startsWith('+');
@@ -137,7 +173,7 @@ async function handleUpdateCommand(bot, chatId, productId, amountStr, supabase) 
         id, 
         quantity
       `)
-      .eq('id', cleanProductId)
+      .eq('id', cleanedProductId)
       .single();
 
     if (product && !productError) {
@@ -153,7 +189,7 @@ async function handleUpdateCommand(bot, chatId, productId, amountStr, supabase) 
     if (productError || !product) {
       return bot.sendMessage(
         chatId,
-        `❌ ${cleanProductId} ID'li ürün envanterde bulunamadı.`,
+        `❌ ${cleanedProductId} ID'li ürün envanterde bulunamadı.`,
         backToMainMenu
       );
     }
@@ -176,7 +212,7 @@ async function handleUpdateCommand(bot, chatId, productId, amountStr, supabase) 
     const { error: updateError } = await supabase
       .from('stock')
       .update({ quantity: newQuantity })
-      .eq('id', cleanProductId);
+      .eq('id', cleanedProductId);
 
     if (updateError) {
       console.error('Supabase güncelleme hatası:', updateError);
@@ -210,7 +246,54 @@ Yeni Miktar: ${newQuantity}`;
   }
 }
 
+/**
+ * Handle the /add command to add stock
+ * @param {Object} bot - Telegram bot instance
+ * @param {number} chatId - Telegram chat ID
+ * @param {string} productId - Product ID to update
+ * @param {string|number} amount - Amount to add (optional, defaults to 1)
+ * @param {Object} supabase - Supabase client instance
+ */
+async function handleAddCommand(bot, chatId, productId, amount, supabase) {
+  const amountToAdd = amount ? parseInt(amount) : 1;
+  
+  if (isNaN(amountToAdd) || amountToAdd <= 0) {
+    return bot.sendMessage(
+      chatId,
+      '❌ Geçersiz miktar. Lütfen pozitif bir sayı girin.',
+      backToMainMenu
+    );
+  }
+  
+  return handleUpdateCommand(bot, chatId, productId, `+${amountToAdd}`, supabase);
+}
+
+/**
+ * Handle the /subtract command to subtract stock
+ * @param {Object} bot - Telegram bot instance
+ * @param {number} chatId - Telegram chat ID
+ * @param {string} productId - Product ID to update
+ * @param {string|number} amount - Amount to subtract (optional, defaults to 1)
+ * @param {Object} supabase - Supabase client instance
+ */
+async function handleSubtractCommand(bot, chatId, productId, amount, supabase) {
+  const amountToSubtract = amount ? parseInt(amount) : 1;
+  
+  if (isNaN(amountToSubtract) || amountToSubtract <= 0) {
+    return bot.sendMessage(
+      chatId,
+      '❌ Geçersiz miktar. Lütfen pozitif bir sayı girin.',
+      backToMainMenu
+    );
+  }
+  
+  return handleUpdateCommand(bot, chatId, productId, `-${amountToSubtract}`, supabase);
+}
+
 module.exports = {
   handleStockCommand,
-  handleUpdateCommand
+  handleUpdateCommand,
+  handleAddCommand,
+  handleSubtractCommand,
+  cleanProductId
 };
