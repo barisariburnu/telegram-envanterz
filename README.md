@@ -107,7 +107,7 @@ docker-compose down
 - `/help` - Display available commands
 - `/stock <product_id>` - Check stock level for a specific product (e.g., `/stock PROD001`)
 - `/add <product_id> <amount>` - Add stock quantity (e.g., `/add PROD001 10`)
-- `/subtract <product_id> <amount>` - Subtract stock quantity (e.g., `/subtract PROD001 5`)
+- `/sub <product_id> <amount>` - Subtract stock quantity (e.g., `/sub PROD001 5`)
 - `/update <product_id> <+/-amount>` - Update stock quantity (legacy format, e.g., `/update PROD001 +10` or `/update PROD001 -5`)
 
 ## Security Considerations

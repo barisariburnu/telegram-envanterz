@@ -24,7 +24,7 @@ async function handleCallbackQuery(bot, callbackQuery, supabase) {
     // Handle different callback data
     if (data === "main_menu") {
       await bot.editMessageText(
-        "Welcome to the Inventory Management Bot! Please select an option:",
+        "Envanter Yönetim Botuna Hoş Geldiniz! Lütfen bir seçenek seçin:",
         {
           chat_id: chatId,
           message_id: messageId,
@@ -51,7 +51,7 @@ async function handleCallbackQuery(bot, callbackQuery, supabase) {
           reply_markup: backToMainMenu.reply_markup,
         }
       );
-    } else if (data === "subtract_stock") {
+    } else if (data === "sub_stock") {
       await bot.editMessageText(
         "➖ Stok Çıkarma\n\nÜrün ID girin (miktar belirtmezseniz 1 adet çıkarılır):\n\nÖrnekler:\n• `PROD001` (1 adet çıkarır)\n• `PROD001 5` (5 adet çıkarır)",
         {
@@ -63,11 +63,11 @@ async function handleCallbackQuery(bot, callbackQuery, supabase) {
       );
     } else if (
       data.startsWith("confirm_add_") ||
-      data.startsWith("confirm_subtract_")
+      data.startsWith("confirm_sub_")
     ) {
       // Extract product ID and amount from callback data
       const parts = data.split("_");
-      const action = parts[1]; // 'add' or 'subtract'
+      const action = parts[1]; // 'add' or 'sub'
       const productId = parts[2];
       const amount = parts[3] ? parseInt(parts[3]) : 1;
 
@@ -98,7 +98,7 @@ async function handleCallbackQuery(bot, callbackQuery, supabase) {
       if (action === "add") {
         newQuantity = product.quantity + amount;
       } else {
-        // subtract
+        // sub
         // Check if there's enough stock
         if (product.quantity < amount) {
           return bot.editMessageText(
@@ -147,10 +147,10 @@ async function handleCallbackQuery(bot, callbackQuery, supabase) {
         message_id: messageId,
         reply_markup: backToMainMenu.reply_markup,
       });
-    } else if (data.startsWith("quick_add_") || data.startsWith("quick_subtract_")) {
+    } else if (data.startsWith("quick_add_") || data.startsWith("quick_sub_")) {
       // Handle quick action buttons from stock query
       const parts = data.split("_");
-      const action = parts[1]; // 'add' or 'subtract'
+      const action = parts[1]; // 'add' or 'sub'
       const productId = parts[2];
       
       await bot.editMessageText(
@@ -184,13 +184,13 @@ Miktar girin (varsayılan: 1):`,
       const amount = parseInt(parts[3]);
       
       await processQuickStockUpdate(bot, callbackQuery, supabase, "add", productId, amount);
-    } else if (data.startsWith("quick_subtract_") && data.split("_").length === 4) {
-      // Handle quick subtract with amount
+    } else if (data.startsWith("quick_sub_") && data.split("_").length === 4) {
+      // Handle quick sub with amount
       const parts = data.split("_");
       const productId = parts[2];
       const amount = parseInt(parts[3]);
       
-      await processQuickStockUpdate(bot, callbackQuery, supabase, "subtract", productId, amount);
+      await processQuickStockUpdate(bot, callbackQuery, supabase, "sub", productId, amount);
     } else if (data.startsWith("back_to_stock_")) {
       // Handle back to stock info
       const productId = data.split("_")[3];
@@ -231,7 +231,7 @@ Miktar girin (varsayılan: 1):`,
  * @param {Object} bot - Telegram bot instance
  * @param {Object} callbackQuery - Callback query data
  * @param {Object} supabase - Supabase client instance
- * @param {string} action - 'add' or 'subtract'
+ * @param {string} action - 'add' or 'sub'
  * @param {string} productId - Product ID
  * @param {number} amount - Amount to update
  */
@@ -267,7 +267,7 @@ async function processQuickStockUpdate(bot, callbackQuery, supabase, action, pro
     if (action === "add") {
       newQuantity = product.quantity + amount;
     } else {
-      // subtract
+      // sub
       if (product.quantity < amount) {
         return bot.editMessageText(
           `❌ Yeterli stok yok. Mevcut miktar: ${product.quantity}.`,
@@ -324,7 +324,7 @@ Yeni Miktar: ${newQuantity}`;
         inline_keyboard: [
           [
             { text: "➕ Tekrar Ekle", callback_data: `quick_add_${productId}` },
-            { text: "➖ Tekrar Çıkar", callback_data: `quick_subtract_${productId}` }
+            { text: "➖ Tekrar Çıkar", callback_data: `quick_sub_${productId}` }
           ],
           [
             { text: "📊 Stok Görüntüle", callback_data: `back_to_stock_${productId}` },

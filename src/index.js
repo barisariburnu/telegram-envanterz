@@ -3,7 +3,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const { createClient } = require('@supabase/supabase-js');
 const { mainMenu } = require('./menus');
 const { isAuthorized } = require('./auth');
-const { handleStockCommand, handleUpdateCommand, handleAddCommand, handleSubtractCommand } = require('./commands');
+const { handleStockCommand, handleAddCommand, handleSubtractCommand } = require('./commands');
 const { handleCallbackQuery } = require('./callbacks');
 
 // Initialize Supabase client
@@ -50,7 +50,7 @@ bot.onText(/\/help/, (msg) => {
     '• `/help` - Bu yardım mesajını göster\n' +
     '• `/stock <ürün_id>` - Stok durumunu kontrol et\n' +
     '• `/add <ürün_id> [miktar]` - Stok ekle (varsayılan: 1)\n' +
-    '• `/subtract <ürün_id> [miktar]` - Stok çıkar (varsayılan: 1)\n\n' +
+    '• `/sub <ürün_id> [miktar]` - Stok çıkar (varsayılan: 1)\n\n' +
     '**Hızlı Kullanım:**\n' +
     '• Sadece ürün ID yazarak stok sorgulayabilirsiniz\n' +
     '• Stok sorguladıktan sonra hızlı ekleme/çıkarma butonları görünür\n' +
@@ -90,8 +90,8 @@ bot.onText(/\/add (.+?)(?:\s+(\d+))?$/, (msg, match) => {
   handleAddCommand(bot, chatId, productId, amount, supabase);
 });
 
-// Handle /subtract command with optional amount
-bot.onText(/\/subtract (.+?)(?:\s+(\d+))?$/, (msg, match) => {
+// Handle /sub command with optional amount
+bot.onText(/\/sub (.+?)(?:\s+(\d+))?$/, (msg, match) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
   

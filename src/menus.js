@@ -10,7 +10,7 @@ const mainMenu = {
       [{ text: "📊 Stok Kontrol", callback_data: "check_stock" }],
       [
         { text: "➕ Stok Ekle", callback_data: "add_stock" },
-        { text: "➖ Stok Çıkar", callback_data: "subtract_stock" },
+        { text: "➖ Stok Çıkar", callback_data: "sub_stock" },
       ],
     ],
   },
@@ -30,7 +30,7 @@ const backToMainMenu = {
 
 /**
  * Create a confirmation menu for stock updates
- * @param {string} action - The action being confirmed (add/subtract)
+ * @param {string} action - The action being confirmed (add/sub)
  * @param {string} productId - The product ID being updated
  * @param {number} amount - The amount to update
  * @returns {Object} Telegram inline keyboard markup

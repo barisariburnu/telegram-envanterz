@@ -98,7 +98,7 @@ Shopier URL: ${data.ebujiteri ? `https://shopier.com/${data.ebujiteri.shopier_id
         inline_keyboard: [
           [
             { text: "➕ Stok Ekle", callback_data: `quick_add_${data.id}` },
-            { text: "➖ Stok Çıkar", callback_data: `quick_subtract_${data.id}` }
+            { text: "➖ Stok Çıkar", callback_data: `quick_sub_${data.id}` }
           ],
           [
             { text: "🔙 Ana Menüye Dön", callback_data: "main_menu" }
@@ -151,7 +151,7 @@ async function handleUpdateCommand(bot, chatId, productId, amountStr, supabase) 
     if (!isAddition && !isSubtraction) {
       return bot.sendMessage(
         chatId,
-        '❌ Geçersiz miktar formatı. Stok eklemek için /add, çıkarmak için /subtract komutunu kullanın.',
+        '❌ Geçersiz miktar formatı. Stok eklemek için /add, çıkarmak için /sub komutunu kullanın.',
         backToMainMenu
       );
     }
@@ -269,11 +269,11 @@ async function handleAddCommand(bot, chatId, productId, amount, supabase) {
 }
 
 /**
- * Handle the /subtract command to subtract stock
+ * Handle the /sub command to sub stock
  * @param {Object} bot - Telegram bot instance
  * @param {number} chatId - Telegram chat ID
  * @param {string} productId - Product ID to update
- * @param {string|number} amount - Amount to subtract (optional, defaults to 1)
+ * @param {string|number} amount - Amount to sub (optional, defaults to 1)
  * @param {Object} supabase - Supabase client instance
  */
 async function handleSubtractCommand(bot, chatId, productId, amount, supabase) {
