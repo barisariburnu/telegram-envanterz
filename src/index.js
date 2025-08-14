@@ -32,7 +32,7 @@ bot.onText(/\/start/, async (msg) => {
 
   await bot.sendMessage(
     chatId,
-    "Merhaba! Envanter Yönetim Botuna Hoş Geldin! Lütfen bir seçenek seç:",
+    "Merhaba! Envanter Yönetim Botuna Hoş Geldin!",
     mainMenu
   );
 });
@@ -142,12 +142,12 @@ bot.on("message", async (msg) => {
               callback_data: `quick_add_${productId}_1`,
             },
             {
-              text: "➕ Stok Ekle (5)",
-              callback_data: `quick_add_${productId}_5`,
+              text: "➕ Stok Ekle (2)",
+              callback_data: `quick_add_${productId}_2`,
             },
             {
-              text: "➕ Stok Ekle (10)",
-              callback_data: `quick_add_${productId}_10`,
+              text: "➕ Stok Ekle (3)",
+              callback_data: `quick_add_${productId}_3`,
             },
           ],
           [
@@ -156,12 +156,12 @@ bot.on("message", async (msg) => {
               callback_data: `quick_sub_${productId}_1`,
             },
             {
-              text: "➖ Stok Çıkar (5)",
-              callback_data: `quick_sub_${productId}_5`,
+              text: "➖ Stok Çıkar (2)",
+              callback_data: `quick_sub_${productId}_2`,
             },
             {
-              text: "➖ Stok Çıkar (10)",
-              callback_data: `quick_sub_${productId}_10`,
+              text: "➖ Stok Çıkar (3)",
+              callback_data: `quick_sub_${productId}_3`,
             },
           ],
           [{ text: "🔙 Ana Menü", callback_data: "main_menu" }],

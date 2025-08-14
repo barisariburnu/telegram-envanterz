@@ -48,7 +48,7 @@ async function handleCallbackQuery(bot, callbackQuery, supabase) {
         bot,
         chatId,
         messageId,
-        "Envanter Yönetim Botuna Hoş Geldiniz! Lütfen bir seçenek seçin:",
+        "Envanter Yönetim Botuna Hoş Geldiniz!",
         { reply_markup: mainMenu.reply_markup }
       );
     } else if (data === "quick_actions") {
