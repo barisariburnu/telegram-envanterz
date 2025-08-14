@@ -7,11 +7,7 @@
 const mainMenu = {
   reply_markup: {
     inline_keyboard: [
-      [{ text: "📊 Stok Kontrol", callback_data: "check_stock" }],
-      [
-        { text: "➕ Stok Ekle", callback_data: "add_stock" },
-        { text: "➖ Stok Çıkar", callback_data: "sub_stock" },
-      ],
+      [{ text: "📊 Stok İşlemleri", callback_data: "quick_actions" }],
     ],
   },
 };
@@ -28,26 +24,20 @@ const backToMainMenu = {
   },
 };
 
-/**
- * Create a confirmation menu for stock updates
- * @param {string} action - The action being confirmed (add/sub)
- * @param {string} productId - The product ID being updated
- * @param {number} amount - The amount to update
- * @returns {Object} Telegram inline keyboard markup
- */
-function createConfirmationMenu(action, productId, amount) {
+function postUpdateMenu(productId) {
   return {
     reply_markup: {
       inline_keyboard: [
         [
+          { text: "➕ Stok Ekle", callback_data: `quick_add_${productId}` },
+          { text: "➖ Stok Çıkar", callback_data: `quick_sub_${productId}` },
+        ],
+        [
           {
-            text: "✅ Onayla",
-            callback_data: `confirm_${action}_${productId}_${amount}`,
+            text: "📊 Stok Görüntüle",
+            callback_data: `view_stock_${productId}`,
           },
-          {
-            text: "❌ İptal",
-            callback_data: "main_menu",
-          },
+          { text: "🏠 Ana Menüye Dön", callback_data: "main_menu" },
         ],
       ],
     },
@@ -57,5 +47,5 @@ function createConfirmationMenu(action, productId, amount) {
 module.exports = {
   mainMenu,
   backToMainMenu,
-  createConfirmationMenu,
+  postUpdateMenu,
 };

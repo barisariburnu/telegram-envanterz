@@ -3,8 +3,29 @@
  * Manages responses to inline keyboard button presses
  */
 
-const { mainMenu, backToMainMenu, createConfirmationMenu } = require("./menus");
-const { cleanProductId } = require("./commands");
+const { mainMenu, backToMainMenu, postUpdateMenu } = require("./menus");
+const { cleanProductId, updateStock } = require("./commands");
+
+/**
+ * Handle message edit errors, fallback to new message if content is identical
+ */
+async function safeEditMessage(bot, chatId, messageId, text, options) {
+  try {
+    await bot.editMessageText(text, {
+      chat_id: chatId,
+      message_id: messageId,
+      ...options,
+    });
+  } catch (error) {
+    if (error.response?.body?.description?.includes("message is not modified"))
+      return;
+    if (messageId) {
+      await bot.sendMessage(chatId, text, options);
+    } else {
+      throw error;
+    }
+  }
+}
 
 /**
  * Handle callback queries from inline keyboard buttons
@@ -23,211 +44,89 @@ async function handleCallbackQuery(bot, callbackQuery, supabase) {
 
     // Handle different callback data
     if (data === "main_menu") {
-      await bot.editMessageText(
+      await safeEditMessage(
+        bot,
+        chatId,
+        messageId,
         "Envanter Yönetim Botuna Hoş Geldiniz! Lütfen bir seçenek seçin:",
-        {
-          chat_id: chatId,
-          message_id: messageId,
-          reply_markup: mainMenu.reply_markup,
-        }
+        { reply_markup: mainMenu.reply_markup }
       );
-    } else if (data === "check_stock") {
-      await bot.editMessageText(
-        "📊 Stok Kontrol\n\nÜrün ID girin:\n\nÖrnek: `/stock PROD001` veya `/stock AF-PROD001-BTY`",
+    } else if (data === "quick_actions") {
+      await safeEditMessage(
+        bot,
+        chatId,
+        messageId,
+        "⚡ Stok İşlemleri\n\nSadece ürün kodunu yapıştırın, işlem seçenekleri gösterilecek:\n\nÖrnekler:\n• `PROD001`\n• `AF-PROD001-BTY`\n• `BKP10884`",
         {
-          chat_id: chatId,
-          message_id: messageId,
           parse_mode: "Markdown",
           reply_markup: backToMainMenu.reply_markup,
         }
       );
-    } else if (data === "add_stock") {
-      await bot.editMessageText(
-        "➕ Stok Ekleme\n\nÜrün ID girin (miktar belirtmezseniz 1 adet eklenir):\n\nÖrnekler:\n• `/add PROD001` (1 adet ekler)\n• `/add PROD001 10` (10 adet ekler)",
-        {
-          chat_id: chatId,
-          message_id: messageId,
-          parse_mode: "Markdown",
-          reply_markup: backToMainMenu.reply_markup,
-        }
-      );
-    } else if (data === "sub_stock") {
-      await bot.editMessageText(
-        "➖ Stok Çıkarma\n\nÜrün ID girin (miktar belirtmezseniz 1 adet çıkarılır):\n\nÖrnekler:\n• `/sub PROD001` (1 adet çıkarır)\n• `/sub PROD001 5` (5 adet çıkarır)",
-        {
-          chat_id: chatId,
-          message_id: messageId,
-          parse_mode: "Markdown",
-          reply_markup: backToMainMenu.reply_markup,
-        }
-      );
-    } else if (
-      data.startsWith("confirm_add_") ||
-      data.startsWith("confirm_sub_")
-    ) {
-      // Extract product ID and amount from callback data
+    } else if (data.startsWith("quick_add_") || data.startsWith("quick_sub_")) {
       const parts = data.split("_");
-      const action = parts[1]; // 'add' or 'sub'
+      const action = parts[1];
       const productId = parts[2];
-      const amount = parts[3] ? parseInt(parts[3]) : 1;
+      const amount = parts[3] ? parseInt(parts[3]) : null;
 
-      // Check if product exists
-      const { data: product, error: productError } = await supabase
-        .from("stock")
-        .select(
-          `
-          id, 
-          quantity, 
-          name, 
-          ebujiteri!inner(shopier_id)
-        `
-        )
-        .eq("id", productId)
-        .single();
-
-      if (productError || !product) {
-        return bot.editMessageText(`❌ Ürün ID ${productId} bulunamadı.`, {
-          chat_id: chatId,
-          message_id: messageId,
-          reply_markup: backToMainMenu.reply_markup,
-        });
-      }
-
-      // Calculate new quantity
-      let newQuantity;
-      if (action === "add") {
-        newQuantity = product.quantity + amount;
+      if (amount) {
+        await processQuickStockUpdate(
+          bot,
+          callbackQuery,
+          supabase,
+          action,
+          productId,
+          amount
+        );
       } else {
-        // sub
-        // Check if there's enough stock
-        if (product.quantity < amount) {
-          return bot.editMessageText(
-            `❌ Yeterli stok yok. Mevcut miktar: ${product.quantity}.`,
-            {
-              chat_id: chatId,
-              message_id: messageId,
-              reply_markup: backToMainMenu.reply_markup,
-            }
-          );
-        }
-        newQuantity = product.quantity - amount;
-      }
-
-      // Update the stock
-      const { error: updateError } = await supabase
-        .from("stock")
-        .update({ quantity: newQuantity })
-        .eq("id", productId);
-
-      if (updateError) {
-        console.error("Supabase güncelleme hatası:", updateError);
-        return bot.editMessageText(
-          "❌ Veritabanı güncellenirken hata oluştu. Lütfen daha sonra tekrar deneyin.",
+        await safeEditMessage(
+          bot,
+          chatId,
+          messageId,
+          `${action === "add" ? "➕" : "➖"} Stok ${
+            action === "add" ? "Ekleme" : "Çıkarma"
+          }\n\nÜrün ID: ${productId}\n\nMiktar girin (varsayılan: 1):`,
           {
-            chat_id: chatId,
-            message_id: messageId,
-            reply_markup: backToMainMenu.reply_markup,
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "1",
+                    callback_data: `quick_${action}_${productId}_1`,
+                  },
+                  {
+                    text: "2",
+                    callback_data: `quick_${action}_${productId}_2`,
+                  },
+                  {
+                    text: "3",
+                    callback_data: `quick_${action}_${productId}_3`,
+                  },
+                ],
+                [
+                  {
+                    text: "🔙 Geri",
+                    callback_data: `back_to_stock_${productId}`,
+                  },
+                  { text: "🏠 Ana Menü", callback_data: "main_menu" },
+                ],
+              ],
+            },
           }
         );
       }
-
-      // Send success message
-      const actionText = action === "add" ? "eklendi" : "çıkarıldı";
-      const amountText = action === "add" ? `+${amount}` : `-${amount}`;
-
-      const successMessage = `✅ Ürün stok miktarı başarıyla güncellendi!
-
-  Ürün ID: ${product.id}
-  Ürün Adı: ${product.name || "N/A"}
-  Miktar: ${amountText} adet ürün ${actionText}
-  Yeni Miktar: ${newQuantity}`;
-
-      await bot.editMessageText(successMessage, {
-        chat_id: chatId,
-        message_id: messageId,
-        reply_markup: backToMainMenu.reply_markup,
-      });
-    } else if (data.startsWith("quick_add_") || data.startsWith("quick_sub_")) {
-      // Handle quick action buttons from stock query
-      const parts = data.split("_");
-      const action = parts[1]; // 'add' or 'sub'
-      const productId = parts[2];
-
-      await bot.editMessageText(
-        `${action === "add" ? "➕" : "➖"} Stok ${
-          action === "add" ? "Ekleme" : "Çıkarma"
-        }
-
-Ürün ID: ${productId}
-
-Miktar girin (varsayılan: 1):`,
-        {
-          chat_id: chatId,
-          message_id: messageId,
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: "1", callback_data: `quick_${action}_${productId}_1` },
-                { text: "5", callback_data: `quick_${action}_${productId}_5` },
-                {
-                  text: "10",
-                  callback_data: `quick_${action}_${productId}_10`,
-                },
-              ],
-              [
-                {
-                  text: "🔙 Geri",
-                  callback_data: `back_to_stock_${productId}`,
-                },
-                { text: "🏠 Ana Menü", callback_data: "main_menu" },
-              ],
-            ],
-          },
-        }
-      );
-    } else if (data.startsWith("quick_add_") && data.split("_").length === 4) {
-      // Handle quick add with amount
-      const parts = data.split("_");
-      const productId = parts[2];
-      const amount = parseInt(parts[3]);
-
-      await processQuickStockUpdate(
-        bot,
-        callbackQuery,
-        supabase,
-        "add",
-        productId,
-        amount
-      );
-    } else if (data.startsWith("quick_sub_") && data.split("_").length === 4) {
-      // Handle quick sub with amount
-      const parts = data.split("_");
-      const productId = parts[2];
-      const amount = parseInt(parts[3]);
-
-      await processQuickStockUpdate(
-        bot,
-        callbackQuery,
-        supabase,
-        "sub",
-        productId,
-        amount
-      );
-    } else if (data.startsWith("back_to_stock_")) {
-      // Handle back to stock info
-      const productId = data.split("_")[3];
-
-      // Re-query stock info and show it
+    } else if (data.startsWith("view_stock_")) {
+      const productId = data.replace("view_stock_", "");
       const { handleStockCommand } = require("./commands");
       await handleStockCommand(bot, chatId, productId, supabase);
-
-      // Delete the current message since handleStockCommand sends a new one
+    } else if (data.startsWith("back_to_stock_")) {
+      const productId = data.split("_")[3];
+      const { handleStockCommand } = require("./commands");
+      await handleStockCommand(bot, chatId, productId, supabase);
       try {
         await bot.deleteMessage(chatId, messageId);
       } catch (deleteError) {
         console.error("Mesaj silinirken hata:", deleteError);
       }
-      return;
     }
   } catch (error) {
     console.error("Callback sorgusu işlenirken hata oluştu:", error);
@@ -243,7 +142,27 @@ Miktar girin (varsayılan: 1):`,
         }
       );
     } catch (secondaryError) {
-      console.error("Hata mesajı gönderilirken hata oluştu:", secondaryError);
+      // If editing fails (e.g., message content is the same), try sending a new message
+      if (
+        secondaryError.response &&
+        secondaryError.response.body &&
+        secondaryError.response.body.description &&
+        secondaryError.response.body.description.includes(
+          "message is not modified"
+        )
+      ) {
+        try {
+          await bot.sendMessage(
+            chatId,
+            "❌ Callback sorgusu işlenirken hata oluştu. Lütfen daha sonra tekrar deneyin.",
+            backToMainMenu
+          );
+        } catch (tertiaryError) {
+          console.error("Yeni mesaj gönderilirken hata oluştu:", tertiaryError);
+        }
+      } else {
+        console.error("Hata mesajı gönderilirken hata oluştu:", secondaryError);
+      }
     }
   }
 }
@@ -267,123 +186,30 @@ async function processQuickStockUpdate(
 ) {
   const chatId = callbackQuery.message.chat.id;
   const messageId = callbackQuery.message.message_id;
+  const cleanedProductId = cleanProductId(productId);
 
   try {
-    // Clean the product ID
-    const cleanedProductId = cleanProductId(productId);
-
-    // Check if product exists
-    const { data: product, error: productError } = await supabase
-      .from("stock")
-      .select(
-        `
-        id, 
-        quantity, 
-        name
-      `
-      )
-      .eq("id", cleanedProductId)
-      .single();
-
-    if (productError || !product) {
-      return bot.editMessageText(`❌ Ürün ID ${cleanedProductId} bulunamadı.`, {
-        chat_id: chatId,
-        message_id: messageId,
-        reply_markup: backToMainMenu.reply_markup,
-      });
-    }
-
-    // Calculate new quantity
-    let newQuantity;
-    if (action === "add") {
-      newQuantity = product.quantity + amount;
-    } else {
-      // sub
-      if (product.quantity < amount) {
-        return bot.editMessageText(
-          `❌ Yeterli stok yok. Mevcut miktar: ${product.quantity}.`,
-          {
-            chat_id: chatId,
-            message_id: messageId,
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: "🔙 Geri",
-                    callback_data: `back_to_stock_${productId}`,
-                  },
-                  { text: "🏠 Ana Menü", callback_data: "main_menu" },
-                ],
-              ],
-            },
-          }
-        );
-      }
-      newQuantity = product.quantity - amount;
-    }
-
-    // Update the stock
-    const { error: updateError } = await supabase
-      .from("stock")
-      .update({ quantity: newQuantity })
-      .eq("id", cleanedProductId);
-
-    if (updateError) {
-      console.error("Supabase güncelleme hatası:", updateError);
-      return bot.editMessageText(
-        "❌ Veritabanı güncellenirken hata oluştu. Lütfen daha sonra tekrar deneyin.",
-        {
-          chat_id: chatId,
-          message_id: messageId,
-          reply_markup: backToMainMenu.reply_markup,
-        }
-      );
-    }
-
-    // Send success message with quick actions
-    const actionText = action === "add" ? "eklendi" : "çıkarıldı";
-    const amountText = action === "add" ? `+${amount}` : `-${amount}`;
-
-    const successMessage = `✅ Stok başarıyla güncellendi!
-
-Ürün ID: ${product.id}
-Ürün Adı: ${product.name || "N/A"}
-İşlem: ${amountText} adet ${actionText}
-Yeni Miktar: ${newQuantity}`;
-
-    await bot.editMessageText(successMessage, {
-      chat_id: chatId,
-      message_id: messageId,
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: "➕ Tekrar Ekle", callback_data: `quick_add_${productId}` },
-            {
-              text: "➖ Tekrar Çıkar",
-              callback_data: `quick_sub_${productId}`,
-            },
-          ],
-          [
-            {
-              text: "📊 Stok Görüntüle",
-              callback_data: `back_to_stock_${productId}`,
-            },
-            { text: "🏠 Ana Menü", callback_data: "main_menu" },
-          ],
-        ],
-      },
+    const result = await updateStock(
+      cleanedProductId,
+      amount,
+      action,
+      supabase
+    );
+    await safeEditMessage(bot, chatId, messageId, result.message, {
+      parse_mode: "Markdown",
+      reply_markup: postUpdateMenu(productId).reply_markup,
     });
   } catch (error) {
-    console.error("Quick stock update hatası:", error);
-    await bot.editMessageText(
-      "❌ Stok güncellenirken hata oluştu. Lütfen daha sonra tekrar deneyin.",
-      {
-        chat_id: chatId,
-        message_id: messageId,
-        reply_markup: backToMainMenu.reply_markup,
-      }
-    );
+    console.error("Stok güncelleme hatası:", error);
+    const errorMessage = `❌ ${
+      error.message || "İşlem sırasında hata oluştu."
+    }`;
+    await safeEditMessage(bot, chatId, messageId, errorMessage, {
+      reply_markup: backToMainMenu.reply_markup,
+    });
   }
+
+  // Eğer özel menü gerekiyorsa, buraya ek işlem eklenebilir
 }
 
 module.exports = {
