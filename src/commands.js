@@ -101,7 +101,7 @@ async function handleStockCommand(bot, chatId, productId, supabase) {
             { text: "➕ Stok Ekle", callback_data: `quick_add_${data.id}` },
             { text: "➖ Stok Çıkar", callback_data: `quick_sub_${data.id}` },
           ],
-          [{ text: "🔙 Ana Menüye Dön", callback_data: "main_menu" }],
+          [{ text: "🔙 Ana Menü", callback_data: "main_menu" }],
         ],
       },
       parse_mode: "Markdown",

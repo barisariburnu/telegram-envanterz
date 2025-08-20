@@ -19,7 +19,7 @@ const mainMenu = {
 const backToMainMenu = {
   reply_markup: {
     inline_keyboard: [
-      [{ text: "🔙 Ana Menüye Dön", callback_data: "main_menu" }],
+      [{ text: "🔙 Ana Menü", callback_data: "main_menu" }],
     ],
   },
 };
@@ -29,15 +29,15 @@ function postUpdateMenu(productId) {
     reply_markup: {
       inline_keyboard: [
         [
-          { text: "➕ Stok Ekle", callback_data: `quick_add_${productId}` },
-          { text: "➖ Stok Çıkar", callback_data: `quick_sub_${productId}` },
+          { text: "➕ Ekle", callback_data: `quick_add_${productId}` },
+          { text: "➖ Çıkar", callback_data: `quick_sub_${productId}` },
         ],
         [
           {
             text: "📊 Stok Görüntüle",
             callback_data: `view_stock_${productId}`,
           },
-          { text: "🏠 Ana Menüye Dön", callback_data: "main_menu" },
+          { text: "🏠 Ana Menü", callback_data: "main_menu" },
         ],
       ],
     },
