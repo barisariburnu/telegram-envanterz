@@ -138,29 +138,29 @@ bot.on("message", async (msg) => {
           ],
           [
             {
-              text: "➕ Ekle (1)",
+              text: "➕ 1",
               callback_data: `quick_add_${productId}_1`,
             },
             {
-              text: "➕ Ekle (2)",
+              text: "➕ 2",
               callback_data: `quick_add_${productId}_2`,
             },
             {
-              text: "➕ Ekle (3)",
+              text: "➕ 3",
               callback_data: `quick_add_${productId}_3`,
             },
           ],
           [
             {
-              text: "➖ Çıkar (1)",
+              text: "➖ 1",
               callback_data: `quick_sub_${productId}_1`,
             },
             {
-              text: "➖ Çıkar (2)",
+              text: "➖ 2",
               callback_data: `quick_sub_${productId}_2`,
             },
             {
-              text: "➖ Çıkar (3)",
+              text: "➖ 3",
               callback_data: `quick_sub_${productId}_3`,
             },
           ],
