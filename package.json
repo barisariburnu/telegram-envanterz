@@ -1,7 +1,7 @@
 {
   "name": "telegram-inventory-bot",
   "version": "1.0.0",
-  "description": "Telegram bot for inventory management with Supabase integration",
+  "description": "A powerful and user-friendly Telegram bot for inventory management with Supabase database integration",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
@@ -11,10 +11,26 @@
     "telegram",
     "bot",
     "inventory",
-    "supabase"
+    "inventory-management",
+    "stock-management",
+    "supabase",
+    "nodejs",
+    "telegram-bot",
+    "stock-tracker"
   ],
-  "author": "",
+  "author": {
+    "name": "Barış Arıburnu",
+    "url": "https://github.com/barisariburnu"
+  },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/barisariburnu/telegram-envanterz.git"
+  },
+  "homepage": "https://github.com/barisariburnu/telegram-envanterz#readme",
+  "bugs": {
+    "url": "https://github.com/barisariburnu/telegram-envanterz/issues"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
     "dotenv": "^16.3.1",
@@ -22,5 +38,9 @@
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=6.0.0"
   }
 }
