@@ -31,9 +31,8 @@ async function safeEditMessage(bot, chatId, messageId, text, options) {
  * Handle callback queries from inline keyboard buttons
  * @param {Object} bot - Telegram bot instance
  * @param {Object} callbackQuery - Callback query data
- * @param {Object} supabase - Supabase client instance
  */
-async function handleCallbackQuery(bot, callbackQuery, supabase) {
+async function handleCallbackQuery(bot, callbackQuery) {
   const chatId = callbackQuery.message.chat.id;
   const messageId = callbackQuery.message.message_id;
   const data = callbackQuery.data;
@@ -72,7 +71,6 @@ async function handleCallbackQuery(bot, callbackQuery, supabase) {
         await processQuickStockUpdate(
           bot,
           callbackQuery,
-          supabase,
           action,
           productId,
           amount
@@ -117,11 +115,11 @@ async function handleCallbackQuery(bot, callbackQuery, supabase) {
     } else if (data.startsWith("view_stock_")) {
       const productId = data.replace("view_stock_", "");
       const { handleStockCommand } = require("./commands");
-      await handleStockCommand(bot, chatId, productId, supabase);
+      await handleStockCommand(bot, chatId, productId);
     } else if (data.startsWith("back_to_stock_")) {
       const productId = data.split("_")[3];
       const { handleStockCommand } = require("./commands");
-      await handleStockCommand(bot, chatId, productId, supabase);
+      await handleStockCommand(bot, chatId, productId);
       try {
         await bot.deleteMessage(chatId, messageId);
       } catch (deleteError) {
@@ -171,7 +169,6 @@ async function handleCallbackQuery(bot, callbackQuery, supabase) {
  * Process quick stock update from callback buttons
  * @param {Object} bot - Telegram bot instance
  * @param {Object} callbackQuery - Callback query data
- * @param {Object} supabase - Supabase client instance
  * @param {string} action - 'add' or 'sub'
  * @param {string} productId - Product ID
  * @param {number} amount - Amount to update
@@ -179,7 +176,6 @@ async function handleCallbackQuery(bot, callbackQuery, supabase) {
 async function processQuickStockUpdate(
   bot,
   callbackQuery,
-  supabase,
   action,
   productId,
   amount
@@ -192,8 +188,7 @@ async function processQuickStockUpdate(
     const result = await updateStock(
       cleanedProductId,
       amount,
-      action,
-      supabase
+      action
     );
     await safeEditMessage(bot, chatId, messageId, result.message, {
       parse_mode: "Markdown",

@@ -79,9 +79,12 @@ async function setup() {
     "Enter your Telegram Bot Token (from BotFather): "
   );
 
-  colorLog("\n2. Supabase Configuration:", "magenta");
-  const supabaseUrl = await askQuestion("Enter your Supabase URL: ");
-  const supabaseKey = await askQuestion("Enter your Supabase Anon Key: ");
+  colorLog("\n2. PostgreSQL Configuration:", "magenta");
+  const pgHost = await askQuestion("Enter PostgreSQL Host (default: localhost): ");
+  const pgPort = await askQuestion("Enter PostgreSQL Port (default: 5432): ");
+  const pgDatabase = await askQuestion("Enter PostgreSQL Database Name (default: dropsync): ");
+  const pgUser = await askQuestion("Enter PostgreSQL Username (default: postgres): ");
+  const pgPassword = await askQuestion("Enter PostgreSQL Password: ");
 
   colorLog("\n3. Security Configuration:", "magenta");
   colorLog(
@@ -99,9 +102,12 @@ async function setup() {
   const envContent = `# Telegram Bot Token from BotFather
 TELEGRAM_BOT_TOKEN=${botToken}
 
-# Supabase Configuration
-SUPABASE_URL=${supabaseUrl}
-SUPABASE_KEY=${supabaseKey}
+# PostgreSQL Configuration
+PG_HOST=${pgHost || "localhost"}
+PG_PORT=${pgPort || "5432"}
+PG_DATABASE=${pgDatabase || "dropsync"}
+PG_USER=${pgUser || "postgres"}
+PG_PASSWORD=${pgPassword}
 
 # Authorized Telegram User IDs (comma-separated)
 AUTHORIZED_USERS=${authorizedUsers}
@@ -137,7 +143,7 @@ AUTHORIZED_USERS=${authorizedUsers}
   colorLog("\n🚀 SETUP COMPLETE! 🚀", "bright");
   colorLog("\nNext steps:", "magenta");
   colorLog(
-    '1. Make sure your Supabase database has the required "stock" table',
+    '1. Make sure your PostgreSQL database has the required "products" table',
     "yellow"
   );
   colorLog('2. Start the bot with "npm start"', "yellow");

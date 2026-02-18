@@ -4,9 +4,15 @@
  */
 
 const { backToMainMenu, postUpdateMenu } = require("./menus");
+const { query, queryOne } = require("./db");
 
 /**
  * Clean product ID by removing prefixes and suffixes
+ * Supported formats:
+ * - PRODUCTID
+ * - AF-PRODUCTID-BTY
+ * - PRODUCTID-G
+ * - AFB-PRODUCTID
  * @param {string} productId - Raw product ID
  * @returns {string} - Cleaned product ID
  */
@@ -16,6 +22,7 @@ function cleanProductId(productId) {
     .trim()
     .toUpperCase()
     .replace(/^AF-(.*)-BTY$/, "$1")
+    .replace(/^AFB-(.*)$/, "$1")
     .replace(/-G$/, "");
 }
 
@@ -24,9 +31,8 @@ function cleanProductId(productId) {
  * @param {Object} bot - Telegram bot instance
  * @param {number} chatId - Telegram chat ID
  * @param {string} productId - Product ID to check
- * @param {Object} supabase - Supabase client instance
  */
-async function handleStockCommand(bot, chatId, productId, supabase) {
+async function handleStockCommand(bot, chatId, productId) {
   try {
     // Validate product ID (now accepts alphanumeric strings)
     if (!productId || productId.trim().length === 0) {
@@ -40,66 +46,32 @@ async function handleStockCommand(bot, chatId, productId, supabase) {
     // Clean the product ID
     const cleanedProductId = cleanProductId(productId);
 
-    // Query the stock table with join to ebujiteri table
-    const { data, error } = await supabase
-      .from("stock")
-      .select(
-        `
-        id, 
-        quantity
-      `
-      )
-      .eq("id", cleanedProductId)
-      .maybeSingle();
-
-    if (error) {
-      console.error("Supabase hatası:", error);
-      return bot.sendMessage(
-        chatId,
-        "❌ Veritabanı sorgulanırken hata oluştu. Lütfen daha sonra tekrar deneyin.",
-        backToMainMenu
-      );
-    }
+    // Query the products table using sku field
+    const data = await queryOne(
+      "SELECT sku, physical_stock FROM products WHERE sku = $1",
+      [cleanedProductId]
+    );
 
     if (!data) {
       return bot.sendMessage(
         chatId,
-        `❌ ${cleanedProductId} ID'li ürün envanterde bulunamadı.`,
+        `❌ ${cleanedProductId} SKU'lu ürün envanterde bulunamadı.`,
         backToMainMenu
       );
     }
 
-    // Get ebujiteri data if product exists
-    const { data: ebujteriData } = await supabase
-      .from("ebujiteri")
-      .select("shopier_id")
-      .eq("id", data.id)
-      .maybeSingle();
-
-    data.ebujiteri = ebujteriData;
-
     // Send the stock information with quick action buttons
-    const hasShopierData =
-      data.ebujiteri &&
-      data.ebujiteri.shopier_id &&
-      data.ebujiteri.shopier_id !== "null";
     const stockInfo = `📊 **Stok Bilgisi**:
 
-**Ürün ID**: ${data.id}
-**Miktar**: ${data.quantity} adet
-**Shopier ID**: ${hasShopierData ? data.ebujiteri.shopier_id : "Yok"}
-**Shopier URL**: ${
-      hasShopierData
-        ? `[Aç](https://shopier.com/${data.ebujiteri.shopier_id})`
-        : "Yok"
-    }`;
+**Ürün SKU**: ${data.sku}
+**Fiziksel Stok**: ${data.physical_stock} adet`;
 
     const quickActionMenu = {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: "➕ Stok Ekle", callback_data: `quick_add_${data.id}` },
-            { text: "➖ Stok Çıkar", callback_data: `quick_sub_${data.id}` },
+            { text: "➕ Stok Ekle", callback_data: `quick_add_${data.sku}` },
+            { text: "➖ Stok Çıkar", callback_data: `quick_sub_${data.sku}` },
           ],
           [{ text: "🔙 Ana Menü", callback_data: "main_menu" }],
         ],
@@ -120,35 +92,30 @@ async function handleStockCommand(bot, chatId, productId, supabase) {
 
 /**
  * Handle the /update command to update stock quantity
- * @param {Object} bot - Telegram bot instance
- * @param {number} chatId - Telegram chat ID
- * @param {string} productId - Product ID to update
- * @param {string} amountStr - Amount string with +/- prefix
- * @param {Object} supabase - Supabase client instance
+ * @param {string} cleanedProductId - Cleaned product SKU
+ * @param {number} amount - Amount to add/subtract
+ * @param {string} action - 'add' or 'sub'
  */
-async function updateStock(cleanedProductId, amount, action, supabase) {
-  const { data: product, error: productError } = await supabase
-    .from("stock")
-    .select("id, quantity")
-    .eq("id", cleanedProductId)
-    .maybeSingle();
+async function updateStock(cleanedProductId, amount, action) {
+  const product = await queryOne(
+    "SELECT sku, physical_stock FROM products WHERE sku = $1",
+    [cleanedProductId]
+  );
 
-  if (productError) throw productError;
   if (!product) throw new Error(`Ürün bulunamadı: ${cleanedProductId}`);
 
   const newQuantity =
-    action === "add" ? product.quantity + amount : product.quantity - amount;
+    action === "add" ? product.physical_stock + amount : product.physical_stock - amount;
   if (action === "sub" && newQuantity < 0)
-    throw new Error(`Yeterli stok yok: ${product.quantity}`);
+    throw new Error(`Yeterli stok yok: ${product.physical_stock}`);
 
-  const { error: updateError } = await supabase
-    .from("stock")
-    .update({ quantity: newQuantity })
-    .eq("id", cleanedProductId);
-  if (updateError) throw updateError;
+  await query(
+    "UPDATE products SET physical_stock = $1 WHERE sku = $2",
+    [newQuantity, cleanedProductId]
+  );
 
   const actionText = action === "add" ? "eklendi" : "çıkarıldı";
-  const successMessage = `✅ **Stok Güncellendi!**\n\n**Ürün ID**: ${product.id}\n**İşlem**: ${amount} adet ${actionText}\n**Yeni Miktar**: ${newQuantity}`;
+  const successMessage = `✅ **Stok Güncellendi!**\n\n**Ürün SKU**: ${product.sku}\n**İşlem**: ${amount} adet ${actionText}\n**Yeni Miktar**: ${newQuantity}`;
 
   return { success: true, message: successMessage };
 }
@@ -159,8 +126,7 @@ async function handleUpdateCommand(
   bot,
   chatId,
   productId,
-  amountStr,
-  supabase
+  amountStr
 ) {
   if (!productId || productId.trim().length === 0) {
     return bot.sendMessage(chatId, "❌ Geçersiz ürün ID.", backToMainMenu);
@@ -182,8 +148,7 @@ async function handleUpdateCommand(
     const result = await updateStock(
       cleanedProductId,
       amount,
-      action,
-      supabase
+      action
     );
     await bot.sendMessage(chatId, result.message, {
       parse_mode: "Markdown",
@@ -204,9 +169,8 @@ async function handleUpdateCommand(
  * @param {number} chatId - Telegram chat ID
  * @param {string} productId - Product ID to update
  * @param {string|number} amount - Amount to add (optional, defaults to 1)
- * @param {Object} supabase - Supabase client instance
  */
-async function handleAddCommand(bot, chatId, productId, amount, supabase) {
+async function handleAddCommand(bot, chatId, productId, amount) {
   const amountToAdd = amount ? parseInt(amount) : 1;
 
   if (!productId || productId.trim().length === 0) {
@@ -222,8 +186,7 @@ async function handleAddCommand(bot, chatId, productId, amount, supabase) {
     const result = await updateStock(
       cleanedProductId,
       amountToAdd,
-      "add",
-      supabase
+      "add"
     );
     await bot.sendMessage(chatId, result.message, {
       parse_mode: "Markdown",
@@ -244,9 +207,8 @@ async function handleAddCommand(bot, chatId, productId, amount, supabase) {
  * @param {number} chatId - Telegram chat ID
  * @param {string} productId - Product ID to update
  * @param {string|number} amount - Amount to sub (optional, defaults to 1)
- * @param {Object} supabase - Supabase client instance
  */
-async function handleSubtractCommand(bot, chatId, productId, amount, supabase) {
+async function handleSubtractCommand(bot, chatId, productId, amount) {
   const amountToSubtract = amount ? parseInt(amount) : 1;
 
   if (!productId || productId.trim().length === 0) {
@@ -262,8 +224,7 @@ async function handleSubtractCommand(bot, chatId, productId, amount, supabase) {
     const result = await updateStock(
       cleanedProductId,
       amountToSubtract,
-      "sub",
-      supabase
+      "sub"
     );
     await bot.sendMessage(chatId, result.message, {
       parse_mode: "Markdown",

@@ -1,6 +1,5 @@
 require("dotenv").config();
 const TelegramBot = require("node-telegram-bot-api");
-const { createClient } = require("@supabase/supabase-js");
 const { mainMenu } = require("./menus");
 const { isAuthorized } = require("./auth");
 const {
@@ -9,11 +8,6 @@ const {
   handleSubtractCommand,
 } = require("./commands");
 const { handleCallbackQuery } = require("./callbacks");
-
-// Initialize Supabase client
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Initialize Telegram bot
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -62,7 +56,8 @@ bot.onText(/\/help/, (msg) => {
       "**Desteklenen Formatlar:**\n" +
       "• `PRODUCTID`\n" +
       "• `AF-PRODUCTID-BTY`\n" +
-      "• `PRODUCTID-G`",
+      "• `PRODUCTID-G`\n" +
+      "• `AFB-PRODUCTID`",
     { parse_mode: "Markdown" }
   );
 });
@@ -77,7 +72,7 @@ bot.onText(/\/stock (.+)/, (msg, match) => {
   }
 
   const productId = match[1].trim();
-  handleStockCommand(bot, chatId, productId, supabase);
+  handleStockCommand(bot, chatId, productId);
 });
 
 // Handle /add command with optional amount
@@ -91,7 +86,7 @@ bot.onText(/\/add (.+?)(?:\s+(\d+))?$/, (msg, match) => {
 
   const productId = match[1].trim();
   const amount = match[2] ? match[2].trim() : null;
-  handleAddCommand(bot, chatId, productId, amount, supabase);
+  handleAddCommand(bot, chatId, productId, amount);
 });
 
 // Handle /sub command with optional amount
@@ -105,7 +100,7 @@ bot.onText(/\/sub (.+?)(?:\s+(\d+))?$/, (msg, match) => {
 
   const productId = match[1].trim();
   const amount = match[2] ? match[2].trim() : null;
-  handleSubtractCommand(bot, chatId, productId, amount, supabase);
+  handleSubtractCommand(bot, chatId, productId, amount);
 });
 
 // Handle text messages for direct product ID input
@@ -188,7 +183,7 @@ bot.on("callback_query", async (callbackQuery) => {
     );
   }
 
-  await handleCallbackQuery(bot, callbackQuery, supabase);
+  await handleCallbackQuery(bot, callbackQuery);
 });
 
 // Error handling

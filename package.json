@@ -1,7 +1,7 @@
 {
   "name": "telegram-inventory-bot",
   "version": "1.0.0",
-  "description": "A powerful and user-friendly Telegram bot for inventory management with Supabase database integration",
+  "description": "A powerful and user-friendly Telegram bot for inventory management with PostgreSQL database integration",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
@@ -13,7 +13,7 @@
     "inventory",
     "inventory-management",
     "stock-management",
-    "supabase",
+    "postgresql",
     "nodejs",
     "telegram-bot",
     "stock-tracker"
@@ -32,9 +32,9 @@
     "url": "https://github.com/barisariburnu/telegram-envanterz/issues"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.39.0",
     "dotenv": "^16.3.1",
-    "node-telegram-bot-api": "^0.64.0"
+    "node-telegram-bot-api": "^0.64.0",
+    "pg": "^8.11.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
