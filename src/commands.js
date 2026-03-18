@@ -27,6 +27,44 @@ function cleanProductId(productId) {
 }
 
 /**
+ * Extract first image URL from product images field.
+ * Supports PostgreSQL arrays and JSON strings.
+ * @param {any} images
+ * @returns {string|null}
+ */
+function getFirstImageUrl(images) {
+  if (!images) return null;
+
+  // If pg returns native JS array
+  if (Array.isArray(images)) {
+    const first = images.find(
+      (item) => typeof item === "string" && /^https?:\/\//i.test(item)
+    );
+    return first || null;
+  }
+
+  // If stored as JSON string
+  if (typeof images === "string") {
+    try {
+      const parsed = JSON.parse(images);
+      if (Array.isArray(parsed)) {
+        const first = parsed.find(
+          (item) => typeof item === "string" && /^https?:\/\//i.test(item)
+        );
+        return first || null;
+      }
+    } catch (_) {
+      // Non-JSON string (ignore)
+    }
+
+    // Fallback: plain URL string
+    if (/^https?:\/\//i.test(images)) return images;
+  }
+
+  return null;
+}
+
+/**
  * Handle the /stock command to check stock level
  * @param {Object} bot - Telegram bot instance
  * @param {number} chatId - Telegram chat ID
@@ -48,7 +86,7 @@ async function handleStockCommand(bot, chatId, productId) {
 
     // Query the products table using sku field
     const data = await queryOne(
-      "SELECT sku, physical_stock FROM products WHERE sku = $1",
+      "SELECT sku, physical_stock, images FROM products WHERE sku = $1",
       [cleanedProductId]
     );
 
@@ -78,6 +116,16 @@ async function handleStockCommand(bot, chatId, productId) {
       },
       parse_mode: "Markdown",
     };
+
+    const firstImageUrl = getFirstImageUrl(data.images);
+
+    if (firstImageUrl) {
+      return bot.sendPhoto(chatId, firstImageUrl, {
+        caption: stockInfo,
+        parse_mode: "Markdown",
+        reply_markup: quickActionMenu.reply_markup,
+      });
+    }
 
     return bot.sendMessage(chatId, stockInfo, quickActionMenu);
   } catch (error) {
