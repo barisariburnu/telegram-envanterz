@@ -59,9 +59,57 @@ async function closePool() {
   console.log("PostgreSQL connection pool closed");
 }
 
+/**
+ * DB'den flag değerini okur.
+ * Satır yoksa false döner.
+ * @param {string} key
+ * @returns {Promise<boolean>}
+ */
+async function getFlag(key) {
+  const row = await queryOne(
+    "SELECT value FROM feature_flags WHERE key = $1",
+    [key]
+  );
+  return row ? row.value : false;
+}
+
+/**
+ * holiday_mode flag'ini ve needs_sync güncellemesini tek transaction'da atomik yapar.
+ * Not: value mevcut değer ile aynı olsa bile needs_sync yine tetiklenir.
+ * @param {boolean} value
+ */
+async function toggleHolidayMode(value) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    await client.query(
+      "UPDATE feature_flags SET value = $1, updated_at = NOW() WHERE key = $2",
+      [value, "holiday_mode"]
+    );
+
+    await client.query(
+      `UPDATE products
+       SET needs_sync = TRUE
+       WHERE physical_stock > 0
+         AND trendyol IS NOT NULL
+         AND trendyol::text != 'null'`
+    );
+
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   pool,
   query,
   queryOne,
   closePool,
+  getFlag,
+  toggleHolidayMode,
 };

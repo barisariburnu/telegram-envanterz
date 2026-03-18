@@ -4,7 +4,7 @@
  */
 
 const { backToMainMenu, postUpdateMenu } = require("./menus");
-const { query, queryOne } = require("./db");
+const { query, queryOne, toggleHolidayMode } = require("./db");
 
 /**
  * Clean product ID by removing prefixes and suffixes
@@ -239,11 +239,34 @@ async function handleSubtractCommand(bot, chatId, productId, amount) {
   }
 }
 
+async function handleHolidayModeCommand(bot, chatId, action) {
+  const value = action === "ac";
+
+  try {
+    await toggleHolidayMode(value);
+    const statusText = value ? "🏖️ AÇIK" : "✅ KAPALI";
+
+    await bot.sendMessage(
+      chatId,
+      `Tatil modu ${statusText} olarak ayarlandı.\nFiziki stoklu ürünler senkronizasyon kuyruğuna alındı.`,
+      backToMainMenu
+    );
+  } catch (err) {
+    console.error("Tatil modu değiştirme hatası:", err);
+    await bot.sendMessage(
+      chatId,
+      "❌ Tatil modu değiştirilemedi. Lütfen tekrar deneyin.",
+      backToMainMenu
+    );
+  }
+}
+
 module.exports = {
   handleStockCommand,
   handleUpdateCommand,
   handleAddCommand,
   handleSubtractCommand,
+  handleHolidayModeCommand,
   cleanProductId,
   updateStock,
 };

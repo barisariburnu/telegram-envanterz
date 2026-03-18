@@ -3,7 +3,8 @@
  * Manages responses to inline keyboard button presses
  */
 
-const { mainMenu, backToMainMenu, postUpdateMenu } = require("./menus");
+const { getMainMenu, backToMainMenu, postUpdateMenu } = require("./menus");
+const { getFlag, toggleHolidayMode } = require("./db");
 const { cleanProductId, updateStock } = require("./commands");
 
 /**
@@ -43,13 +44,38 @@ async function handleCallbackQuery(bot, callbackQuery) {
 
     // Handle different callback data
     if (data === "main_menu") {
+      const menu = await getMainMenu();
       await safeEditMessage(
         bot,
         chatId,
         messageId,
         "Envanter Yönetim Botuna Hoş Geldiniz!",
-        { reply_markup: mainMenu.reply_markup }
+        { reply_markup: menu.reply_markup }
       );
+    } else if (data === "toggle_holiday_mode") {
+      const current = await getFlag("holiday_mode");
+      const next = !current;
+      try {
+        await toggleHolidayMode(next);
+        const statusText = next ? "🏖️ AÇIK" : "✅ KAPALI";
+        const menu = await getMainMenu();
+        await safeEditMessage(
+          bot,
+          chatId,
+          messageId,
+          `Tatil modu ${statusText} olarak ayarlandı.\nFiziki stoklu ürünler senkronizasyon kuyruğuna alındı.`,
+          { reply_markup: menu.reply_markup }
+        );
+      } catch (err) {
+        console.error("toggle_holiday_mode hatası:", err);
+        await safeEditMessage(
+          bot,
+          chatId,
+          messageId,
+          "❌ İşlem başarısız. Lütfen tekrar deneyin.",
+          { reply_markup: backToMainMenu.reply_markup }
+        );
+      }
     } else if (data === "quick_actions") {
       await safeEditMessage(
         bot,

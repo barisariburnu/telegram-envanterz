@@ -3,14 +3,23 @@
  * Contains inline keyboard layouts for different bot functionalities
  */
 
-// Main menu with primary options
-const mainMenu = {
-  reply_markup: {
-    inline_keyboard: [
-      [{ text: "📊 Stok İşlemleri", callback_data: "quick_actions" }],
-    ],
-  },
-};
+const { getFlag } = require("./db");
+
+async function getMainMenu() {
+  const holidayMode = await getFlag("holiday_mode");
+  const holidayLabel = holidayMode
+    ? "🏖️ Tatil Modu: AÇIK"
+    : "✅ Tatil Modu: KAPALI";
+
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "📊 Stok İşlemleri", callback_data: "quick_actions" }],
+        [{ text: holidayLabel, callback_data: "toggle_holiday_mode" }],
+      ],
+    },
+  };
+}
 
 /**
  * Create a back to main menu button
@@ -45,7 +54,7 @@ function postUpdateMenu(productId) {
 }
 
 module.exports = {
-  mainMenu,
+  getMainMenu,
   backToMainMenu,
   postUpdateMenu,
 };

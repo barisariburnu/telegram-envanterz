@@ -1,11 +1,12 @@
 require("dotenv").config();
 const TelegramBot = require("node-telegram-bot-api");
-const { mainMenu } = require("./menus");
+const { getMainMenu } = require("./menus");
 const { isAuthorized } = require("./auth");
 const {
   handleStockCommand,
   handleAddCommand,
   handleSubtractCommand,
+  handleHolidayModeCommand,
 } = require("./commands");
 const { handleCallbackQuery } = require("./callbacks");
 
@@ -24,10 +25,11 @@ bot.onText(/\/start/, async (msg) => {
     return bot.sendMessage(chatId, "Bu botu kullanma yetkiniz yok.");
   }
 
+  const menu = await getMainMenu();
   await bot.sendMessage(
     chatId,
     "Merhaba! Envanter Yönetim Botuna Hoş Geldin!",
-    mainMenu
+    menu
   );
 });
 
@@ -101,6 +103,18 @@ bot.onText(/\/sub (.+?)(?:\s+(\d+))?$/, (msg, match) => {
   const productId = match[1].trim();
   const amount = match[2] ? match[2].trim() : null;
   handleSubtractCommand(bot, chatId, productId, amount);
+});
+
+// Handle /tatil command
+bot.onText(/\/tatil (ac|kapat)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+
+  if (!isAuthorized(userId)) {
+    return bot.sendMessage(chatId, "Bu botu kullanma yetkiniz yok.");
+  }
+
+  await handleHolidayModeCommand(bot, chatId, match[1]);
 });
 
 // Handle text messages for direct product ID input
