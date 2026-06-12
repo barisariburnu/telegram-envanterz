@@ -10,33 +10,66 @@ const {
 } = require("./commands");
 const { handleCallbackQuery } = require("./callbacks");
 
-// Initialize Telegram bot
-const token = process.env.TELEGRAM_BOT_TOKEN;
-const bot = new TelegramBot(token, { polling: true });
+// ─── Sabitler ────────────────────────────────────────────────────────────────
+const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-console.log("Bot is starting...");
+/**
+ * Art arda bu kadar polling hatası gelirse process.exit(1) çağrılır.
+ * Docker'ın restart: always politikası konteyneri otomatik yeniden başlatır.
+ */
+const MAX_CONSECUTIVE_ERRORS = 15;
 
-// Handle /start command
+/** Geçici hata durumunda process.exit öncesi bekleme süresi (ms) */
+const EXIT_DELAY_MS = 3000;
+
+// ─── Bot Başlatma ─────────────────────────────────────────────────────────────
+let pollingErrorCount = 0;
+let exitScheduled = false;
+
+const bot = new TelegramBot(TOKEN, {
+  polling: {
+    interval: 1000,
+    autoStart: true,
+    params: { timeout: 10 },
+  },
+});
+
+console.log(`[${new Date().toISOString()}] Bot başlatıldı.`);
+
+// ─── Yardımcı ─────────────────────────────────────────────────────────────────
+
+/**
+ * Hata geçici mi? (Telegram sunucu taraflı veya ağ zaman aşımı)
+ * @param {Error} error
+ * @returns {boolean}
+ */
+function isTransientError(error) {
+  if (error.code === "EFATAL" || error.code === "ETELEGRAM") return true;
+  if (error.response) {
+    return [502, 503, 504].includes(error.response.statusCode);
+  }
+  return false;
+}
+
+// ─── Komut Handler'ları ───────────────────────────────────────────────────────
+
+// /start
 bot.onText(/\/start/, async (msg) => {
-  const chatId = msg.chat.id;
-  const userId = msg.from.id;
+  const { id: chatId } = msg.chat;
+  const { id: userId } = msg.from;
 
   if (!isAuthorized(userId)) {
     return bot.sendMessage(chatId, "Bu botu kullanma yetkiniz yok.");
   }
 
   const menu = await getMainMenu();
-  await bot.sendMessage(
-    chatId,
-    "Merhaba! Envanter Yönetim Botuna Hoş Geldin!",
-    menu
-  );
+  await bot.sendMessage(chatId, "Merhaba! Envanter Yönetim Botuna Hoş Geldin!", menu);
 });
 
-// Handle /help command
+// /help
 bot.onText(/\/help/, (msg) => {
-  const chatId = msg.chat.id;
-  const userId = msg.from.id;
+  const { id: chatId } = msg.chat;
+  const { id: userId } = msg.from;
 
   if (!isAuthorized(userId)) {
     return bot.sendMessage(chatId, "Bu botu kullanma yetkiniz yok.");
@@ -64,51 +97,46 @@ bot.onText(/\/help/, (msg) => {
   );
 });
 
-// Handle /stock command
+// /stock <id>
 bot.onText(/\/stock (.+)/, (msg, match) => {
-  const chatId = msg.chat.id;
-  const userId = msg.from.id;
+  const { id: chatId } = msg.chat;
+  const { id: userId } = msg.from;
 
   if (!isAuthorized(userId)) {
     return bot.sendMessage(chatId, "Bu botu kullanma yetkiniz yok.");
   }
 
-  const productId = match[1].trim();
-  handleStockCommand(bot, chatId, productId);
+  handleStockCommand(bot, chatId, match[1].trim());
 });
 
-// Handle /add command with optional amount
+// /add <id> [miktar]
 bot.onText(/\/add (.+?)(?:\s+(\d+))?$/, (msg, match) => {
-  const chatId = msg.chat.id;
-  const userId = msg.from.id;
+  const { id: chatId } = msg.chat;
+  const { id: userId } = msg.from;
 
   if (!isAuthorized(userId)) {
     return bot.sendMessage(chatId, "Bu botu kullanma yetkiniz yok.");
   }
 
-  const productId = match[1].trim();
-  const amount = match[2] ? match[2].trim() : null;
-  handleAddCommand(bot, chatId, productId, amount);
+  handleAddCommand(bot, chatId, match[1].trim(), match[2] ?? null);
 });
 
-// Handle /sub command with optional amount
+// /sub <id> [miktar]
 bot.onText(/\/sub (.+?)(?:\s+(\d+))?$/, (msg, match) => {
-  const chatId = msg.chat.id;
-  const userId = msg.from.id;
+  const { id: chatId } = msg.chat;
+  const { id: userId } = msg.from;
 
   if (!isAuthorized(userId)) {
     return bot.sendMessage(chatId, "Bu botu kullanma yetkiniz yok.");
   }
 
-  const productId = match[1].trim();
-  const amount = match[2] ? match[2].trim() : null;
-  handleSubtractCommand(bot, chatId, productId, amount);
+  handleSubtractCommand(bot, chatId, match[1].trim(), match[2] ?? null);
 });
 
-// Handle /tatil command
+// /tatil ac|kapat
 bot.onText(/\/tatil (ac|kapat)/, async (msg, match) => {
-  const chatId = msg.chat.id;
-  const userId = msg.from.id;
+  const { id: chatId } = msg.chat;
+  const { id: userId } = msg.from;
 
   if (!isAuthorized(userId)) {
     return bot.sendMessage(chatId, "Bu botu kullanma yetkiniz yok.");
@@ -117,92 +145,99 @@ bot.onText(/\/tatil (ac|kapat)/, async (msg, match) => {
   await handleHolidayModeCommand(bot, chatId, match[1]);
 });
 
-// Handle text messages for direct product ID input
+// ─── Mesaj Handler'ı (Doğrudan ürün ID girişi) ───────────────────────────────
 bot.on("message", async (msg) => {
-  const chatId = msg.chat.id;
-  const userId = msg.from.id;
+  const { id: chatId } = msg.chat;
+  const { id: userId } = msg.from;
   const text = msg.text;
 
-  // Skip if not authorized or if it's a command
-  if (!isAuthorized(userId) || !text || text.startsWith("/")) {
-    return;
-  }
+  if (!isAuthorized(userId) || !text || text.startsWith("/")) return;
 
-  // Check if this is a response to a menu action by checking recent callback data
-  // This is a simple approach - in production you might want to use user sessions
-  const parts = text.trim().split(/\s+/);
-  const productId = parts[0];
-  const amount = parts[1];
+  const [productId] = text.trim().split(/\s+/);
 
-  // If it looks like a product ID (alphanumeric), show action menu
-  if (/^[A-Za-z0-9\-_]+$/.test(productId)) {
-    const actionMenu = {
+  if (!/^[A-Za-z0-9\-_]+$/.test(productId)) return;
+
+  await bot.sendMessage(
+    chatId,
+    `⚡ Stok İşlemleri - ${productId}\n\nNe yapmak istiyorsunuz?`,
+    {
       reply_markup: {
         inline_keyboard: [
+          [{ text: "📊 Stok Görüntüle", callback_data: `view_stock_${productId}` }],
           [
-            {
-              text: "📊 Stok Görüntüle",
-              callback_data: `view_stock_${productId}`,
-            },
+            { text: "➕ 1", callback_data: `quick_add_${productId}_1` },
+            { text: "➕ 2", callback_data: `quick_add_${productId}_2` },
+            { text: "➕ 3", callback_data: `quick_add_${productId}_3` },
           ],
           [
-            {
-              text: "➕ 1",
-              callback_data: `quick_add_${productId}_1`,
-            },
-            {
-              text: "➕ 2",
-              callback_data: `quick_add_${productId}_2`,
-            },
-            {
-              text: "➕ 3",
-              callback_data: `quick_add_${productId}_3`,
-            },
-          ],
-          [
-            {
-              text: "➖ 1",
-              callback_data: `quick_sub_${productId}_1`,
-            },
-            {
-              text: "➖ 2",
-              callback_data: `quick_sub_${productId}_2`,
-            },
-            {
-              text: "➖ 3",
-              callback_data: `quick_sub_${productId}_3`,
-            },
+            { text: "➖ 1", callback_data: `quick_sub_${productId}_1` },
+            { text: "➖ 2", callback_data: `quick_sub_${productId}_2` },
+            { text: "➖ 3", callback_data: `quick_sub_${productId}_3` },
           ],
           [{ text: "🔙 Ana Menü", callback_data: "main_menu" }],
         ],
       },
-    };
-
-    await bot.sendMessage(
-      chatId,
-      `⚡ Stok İşlemleri - ${productId}\n\nNe yapmak istiyorsunuz?`,
-      actionMenu
-    );
-  }
+    }
+  );
 });
 
-// Handle callback queries (button clicks)
+// ─── Callback Query Handler'ı ─────────────────────────────────────────────────
 bot.on("callback_query", async (callbackQuery) => {
-  const userId = callbackQuery.from.id;
+  const { id: userId } = callbackQuery.from;
 
   if (!isAuthorized(userId)) {
-    return bot.answerCallbackQuery(
-      callbackQuery.id,
-      "Bu botu kullanma yetkiniz yok."
-    );
+    return bot.answerCallbackQuery(callbackQuery.id, "Bu botu kullanma yetkiniz yok.");
   }
 
   await handleCallbackQuery(bot, callbackQuery);
 });
 
-// Error handling
+// ─── Polling Hata Yönetimi ───────────────────────────────────────────────────
 bot.on("polling_error", (error) => {
-  console.error("Polling error:", error);
+  const timestamp = new Date().toISOString();
+
+  if (!isTransientError(error)) {
+    // Kritik hata → hemen çık, Docker yeniden başlatsın
+    console.error(`[${timestamp}] KRİTİK polling hatası:`, error.message);
+    process.exit(1);
+    return;
+  }
+
+  pollingErrorCount++;
+  console.warn(
+    `[${timestamp}] Geçici polling hatası (${pollingErrorCount}/${MAX_CONSECUTIVE_ERRORS}): ` +
+      `${error.code ?? error.message}`
+  );
+
+  // Art arda çok fazla hata → process'i sonlandır, Docker otomatik restart yapar
+  if (pollingErrorCount >= MAX_CONSECUTIVE_ERRORS && !exitScheduled) {
+    exitScheduled = true;
+    console.error(
+      `[${timestamp}] ${MAX_CONSECUTIVE_ERRORS} art arda hata oluştu. ` +
+        `${EXIT_DELAY_MS / 1000}s sonra yeniden başlatılıyor...`
+    );
+    setTimeout(() => process.exit(1), EXIT_DELAY_MS);
+  }
 });
 
-console.log("Bot is running...");
+// Başarılı her polling döngüsünde hata sayacını sıfırla
+bot.on("polling", () => {
+  if (pollingErrorCount > 0) {
+    console.log(`[${new Date().toISOString()}] Polling düzeldi, hata sayacı sıfırlandı.`);
+    pollingErrorCount = 0;
+    exitScheduled = false;
+  }
+});
+
+// ─── Process Hata Yakalama ────────────────────────────────────────────────────
+process.on("uncaughtException", (error) => {
+  console.error(`[${new Date().toISOString()}] Yakalanmamış hata:`, error.message);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error(`[${new Date().toISOString()}] İşlenmeyen Promise reddi:`, reason);
+  process.exit(1);
+});
+
+console.log(`[${new Date().toISOString()}] Bot çalışıyor.`);
